@@ -11,6 +11,12 @@ use glutin_window::GlutinWindow as Window;
 use opengl_graphics::{Colored, Textured, GlGraphics, OpenGL};
 use rand::Rng;
 use std::time::SystemTime;
+use graphics::math::hsv;
+use graphics::types::Color;
+
+const WHITE: [f32; 4] = [1.0, 1.0, 1.0, 1.0];
+const BLACK: [f32; 4] = [0.0, 0.0, 0.0, 1.0];
+const RED: [f32; 4] = [1.0, 0.0, 0.0, 1.0];
 
 pub struct App {
     time : f64,
@@ -18,6 +24,7 @@ pub struct App {
 }
 
 struct Point(f64, f64, f64);
+
 struct VFParams {
     a1: usize,
     a2: usize,
@@ -52,19 +59,24 @@ fn plot_points(time : f64, gl : &mut GlGraphics, args : &RenderArgs) {
     };
     for _ in 1..ticks {
         let mut points_new = Vec::new();
-        for p in points {
+        for (i, p) in points.iter().enumerate() {
+            let color = gen_color(i as f64 / points.len() as f64);
             let p_new = mutate_point(1.0, &p, &params);
-            line_points(gl, args, &p, &p_new);
+            line_points(gl, args, color, &p, &p_new);
             points_new.push(p_new);
         }
         points = points_new;
     }
 }
 
-fn line_points(gl : &mut GlGraphics, args : &RenderArgs, p1 : &Point, p2 : &Point) {
-    use graphics::*;
 
-    const WHITE: [f32; 4] = [1.0, 1.0, 1.0, 1.0];
+fn gen_color(i : f64) -> Color {
+    hsv(RED, (i * 2.0 * PI) as f32, 0.8, 1.0)
+}
+
+
+fn line_points(gl : &mut GlGraphics, args : &RenderArgs, color : Color, p1 : &Point, p2 : &Point) {
+    use graphics::*;
 
     let (x_mid, y_mid) = ((args.width / 2) as f64, (args.height / 2) as f64);
     let scale = 50.0;
@@ -81,7 +93,7 @@ fn line_points(gl : &mut GlGraphics, args : &RenderArgs, p1 : &Point, p2 : &Poin
     gl.draw(args.viewport(), |c, gl| {
         let transform = c.transform;
         let l = [x_start, y_start, x_end, y_end];
-        line(WHITE, 1.0, l, transform, gl);
+        line(color, 1.0, l, transform, gl);
     });
 }
 
@@ -132,7 +144,6 @@ fn vector_field(p: &Point, params: &VFParams) -> Point {
 impl App {
     fn render(&mut self, args: &RenderArgs) {
         use graphics::*;
-        const BLACK: [f32; 4] = [0.0, 0.0, 0.0, 1.0];
         self.gl.draw(args.viewport(), |c, gl| {
             // Clear the screen.
             clear(BLACK, gl);
