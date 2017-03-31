@@ -20,9 +20,13 @@ const RED: [f32; 4] = [1.0, 0.0, 0.0, 1.0];
 
 pub struct App {
     time : f64,
-    gl: GlGraphics, // OpenGL drawing backend.
+    gl: GlGraphics,
+    wavefront : Vec<Point>,
+    wavefront_prev : Vec<Point>,
+    params : VFParams,
 }
 
+#[derive(Clone)]
 struct Point(f64, f64, f64);
 
 struct VFParams {
@@ -40,35 +44,13 @@ struct VFParams {
 
 const PI: f64 = 3.141;
 
-fn plot_points(time : f64, gl : &mut GlGraphics, args : &RenderArgs) {
-    let mut rng = rand::thread_rng();
-    //let offset = rng.gen::<f64>();
-    let mut points = generate_init_points(0.0, 1.0, 20);
-    let ticks = 30;
-    let params = VFParams {
-        a1 : 1,
-        a2 : 2,
-        a3 : 0,
-        p : 0.0,
-        q : 0.1,
-        r : 0.1 + (time/1000.0).sin(),
-        s : 0.5,
-        v : 0.1,
-        w : 0.2,
-        u : 0.2,
-    };
-    for _ in 1..ticks {
-        let mut points_new = Vec::new();
-        for (i, p) in points.iter().enumerate() {
-            let color = gen_color(i as f64 / points.len() as f64);
-            let p_new = mutate_point(1.0, &p, &params);
-            line_points(gl, args, color, &p, &p_new);
-            points_new.push(p_new);
-        }
-        points = points_new;
+fn plot_points(gl : &mut GlGraphics, args : &RenderArgs, wavefront : &[Point], wavefront_prev : &[Point]){
+    //  Assume wavefront length = wavefront_prev length
+    for (i, p) in wavefront.iter().enumerate() {
+        let color = gen_color(i as f64 / wavefront.len() as f64);
+        line_points(gl, args, color, &p, &wavefront_prev[i]);
     }
 }
-
 
 fn gen_color(i : f64) -> Color {
     hsv(RED, (i * 2.0 * PI) as f32, 0.8, 1.0)
@@ -146,13 +128,16 @@ impl App {
         use graphics::*;
         self.gl.draw(args.viewport(), |c, gl| {
             // Clear the screen.
-            clear(BLACK, gl);
+            //clear(BLACK, gl);
         });
-        plot_points(self.time, &mut self.gl, args);
+        plot_points(&mut self.gl, args, &self.wavefront, &self.wavefront_prev);
+        self.wavefront_prev = self.wavefront.clone();
     }
 
     fn update(&mut self, args: &UpdateArgs) {
         self.time += 1.0;
+        
+        self.wavefront = self.wavefront.iter().map(|p| mutate_point(40.0 * args.dt, p, &self.params)).collect();
     }
 }
 
@@ -169,9 +154,28 @@ fn main() {
     let c = Colored::new(opengl.to_glsl());
     let t = Textured::new(opengl.to_glsl());
     let glgraphics = GlGraphics::from_colored_textured(c, t);
+
+    let initial_points = generate_init_points(0.0, 1.0, 50);
+
+    let params = VFParams {
+        a1 : 1,
+        a2 : 2,
+        a3 : 0,
+        p : 0.0,
+        q : 0.1,
+        r : 0.1,
+        s : 0.5,
+        v : 0.1,
+        w : 0.2,
+        u : 0.2,
+    };
+
     let mut app = App {
         time : 0.0,
         gl: glgraphics,
+        wavefront : initial_points.clone(),
+        wavefront_prev : initial_points,
+        params : params,
     };
 
     let mut prev_time = SystemTime::now();
