@@ -13,9 +13,9 @@ use piston::event_loop::*;
 use piston::input::*;
 use piston::window::WindowSettings;
 use rand::distributions::{IndependentSample, Range};
+use std::f64::consts::PI;
 use std::path::Path;
 use std::time::SystemTime;
-use std::f64::consts::PI;
 
 const WHITE: [f32; 4] = [1.0, 1.0, 1.0, 1.0];
 const BLACK: [f32; 4] = [0.0, 0.0, 0.0, 1.0];
@@ -36,12 +36,13 @@ pub struct Simulation {
 
 pub struct App {
     pub sim: Simulation,
+    pub plot_style: PlotStyle,
 
     gl: GlGraphics,
     font: GlyphCache<'static>,
     draw_width: f64,
     sim_speed_mod: f64,
-    plot_style: PlotStyle,
+    scale: f64,
 }
 
 #[derive(Clone)]
@@ -96,13 +97,14 @@ impl VFParams {
     }
 }
 
-enum PlotStyle {
+pub enum PlotStyle {
     Point,
     Line,
     Radial,
 }
 
 fn plot_points(gl: &mut GlGraphics,
+               scale: f64,
                args: &RenderArgs,
                plot_style: &PlotStyle,
                width: f64,
@@ -113,15 +115,33 @@ fn plot_points(gl: &mut GlGraphics,
         let color = gen_color(i as f64 / wavefront.len() as f64);
         match *plot_style {
             PlotStyle::Point => {
-                line_points(gl, args, color, width, p, &wavefront_prev[i]);
+                line_points(gl,
+                            scale,
+                            args,
+                            color,
+                            width,
+                            p,
+                            &wavefront_prev[i]);
             }
             PlotStyle::Line => {
                 if i > 0 {
-                    line_points(gl, args, color, width, p, &wavefront[i - 1]);
+                    line_points(gl,
+                                scale,
+                                args,
+                                color,
+                                width,
+                                p,
+                                &wavefront[i - 1]);
                 }
             }
             PlotStyle::Radial => {
-                line_points(gl, args, color, width, p, &Point(0.0, 0.0, 0.0));
+                line_points(gl,
+                            scale,
+                            args,
+                            color,
+                            width,
+                            p,
+                            &Point(0.0, 0.0, 0.0));
             }
         }
     }
@@ -133,6 +153,7 @@ fn gen_color(i: f64) -> Color {
 
 
 fn line_points(gl: &mut GlGraphics,
+               scale: f64,
                args: &RenderArgs,
                color: Color,
                width: f64,
@@ -141,9 +162,8 @@ fn line_points(gl: &mut GlGraphics,
     use graphics::*;
 
     let (x_mid, y_mid) = ((args.width / 2) as f64, (args.height / 2) as f64);
-    let scale = 50.0;
 
-    //For now ignore view angle and z
+    //  Project onto x y orthographically
     let Point(x1, y1, _) = *p1;
     let Point(x2, y2, _) = *p2;
 
@@ -214,7 +234,7 @@ impl App {
         let simulation = Simulation {
             time: 0.0,
             time_max: 100.0,
-            sim_speed: 0.3,
+            sim_speed: 15.0,
             wavefront: Vec::new(),
             wavefront_prev: Vec::new(),
             params: params,
@@ -226,7 +246,8 @@ impl App {
         let mut app = App {
             sim: simulation,
             draw_width: 1.0,
-            sim_speed_mod: 0.01,
+            sim_speed_mod: 0.1,
+            scale: 50.0,
             gl: glgraphics,
             font: GlyphCache::new(Path::new("fonts/alterebro.ttf")).unwrap(),
             plot_style: plot_style,
@@ -249,7 +270,9 @@ impl App {
             // Clear the screen.
             clear(BLACK, gl);
         });
+
         plot_points(&mut self.gl,
+                    self.scale,
                     args,
                     &self.plot_style,
                     self.draw_width,
@@ -299,7 +322,11 @@ impl App {
 
     fn update(&mut self, args: &UpdateArgs) {
         self.sim.time += 1.0;
-        let dt = self.sim.sim_speed * (self.sim.time / self.sim.time_max).sin();
+
+        //  Advance time in sinusoidal pattern based on time_max and sim_speed
+        let dt = self.sim.sim_speed * args.dt *
+                 (self.sim.time / self.sim.time_max).sin();
+
         self.sim.wavefront = self.sim
             .wavefront
             .iter()
@@ -315,8 +342,7 @@ impl App {
 fn main() {
     let opengl = OpenGL::V4_3;
 
-    // Create an Glutin window.
-    let mut window: Window = WindowSettings::new("spinning-square", [800, 600])
+    let mut window: Window = WindowSettings::new("demo", [800, 600])
         .opengl(opengl)
         .exit_on_esc(true)
         .build()
@@ -338,8 +364,7 @@ fn main() {
     while let Some(e) = events.next(&mut window) {
         match e {
             Input::Render(r) => {
-
-                //  Print framerate
+                //  Calculate framerate
                 let dt = prev_time.elapsed().unwrap();
                 prev_time = SystemTime::now();
                 let fps = 1000.0 * 1000.0 * 1000.0 / (dt.subsec_nanos() as f64);
@@ -351,6 +376,15 @@ fn main() {
             }
             Input::Press(i) => {
                 match i {
+                    Button::Keyboard(Key::P) => {
+                        app.plot_style = PlotStyle::Point;
+                    }
+                    Button::Keyboard(Key::L) => {
+                        app.plot_style = PlotStyle::Line;
+                    }
+                    Button::Keyboard(Key::R) => {
+                        app.plot_style = PlotStyle::Radial;
+                    }
                     Button::Keyboard(Key::Down) => {
                         app.sim.sim_speed -= app.sim_speed_mod;
                     }
