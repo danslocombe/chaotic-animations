@@ -54,7 +54,7 @@ fn generate_init_points(offset: f64, r: f64, n: usize) -> Vec<Point> {
         let n_f = n as f64;
         let x = r * (offset + (i_f / n_f) * PI).cos();
         let y = r * (offset + (i_f / n_f) * PI).sin();
-        let z = r * (offset + (i_f / n_f) * PI).sin();
+        let z = 2.0 * i_f / n_f * r - r;
         let p = Point::new(x, y, z);
         points.push(p);
     }
